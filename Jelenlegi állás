@@ -1,0 +1,142 @@
+const express = require('express'); // Nodejs keretrendszer, erre épül az egész backend
+const bodyparser = require('body-parser'); // Middleware a frontendből való requestekhez  (req.body)
+const {Datatypes, Sequelize, Date, DataTypes} = require('sequelize'); // Adatbázis szinkronizálásához szükséges
+const cors = require('cors'); // Middleware a front és a back közötti kapcsolat működéséhez szükséges
+const bcrypt = require('bcrypt'); // Jelszó titkosítás
+const crypto = require('crypto'); // JWT token generálásához szüksges
+const jwt = require('jsonwebtoken'); // JWT token
+const { v4: uuidv4 } = require('uuid'); // Egyedi felhasználói id generáláshoz szükséges
+
+const userId = uuidv4();
+
+
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
+
+
+app.use(cors({
+    origin: 'http://localhost:4200'
+}));
+
+app.use(bodyparser.json());
+app.use(bodyparser.urlencoded({extended: true}));
+
+// Generál egy 32 bytos (256 bit) véletlenszerű kulcsot
+const SECRET_KEY = crypto.randomBytes(32).toString('hex');
+
+
+const sequelize = new Sequelize('users', 'root', '', {
+    host: 'localhost',
+    dialect: 'mysql',
+    port: 3306,
+    logging: false
+});
+
+const felhasznalok = sequelize.define('felhasznalok', {
+    id: {
+        type: DataTypes.INTEGER,
+        autoIncrement: true,
+        primaryKey: true
+    },
+    name: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    email: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    password: {
+        type: DataTypes.STRING,
+        allowNull: false
+    }
+});
+
+
+sequelize.sync()
+    .then(() => {(
+        console.log('Adatbázis szinkornizálva!'));
+    })
+    .catch(() => {(
+        console.log('Hiba történt az adatbázis szinkronizálása közben!')
+    )});
+
+
+app.post('/register', async (req, res) => {
+    const {name, email, password} = req.body;
+
+    if (typeof(name) == undefined) {
+        return res.status(401).json({message: 'Hiba, a név objektum nem lehet undefined!'});
+    }
+
+    if (typeof(email) == undefined) {
+        return res.status(401).json({message: 'Hiba, az email objektum nem lehet undefined!'});
+    }
+
+    if (typeof(password) == undefined) {
+        return res.status(401).json({message: 'Hiba, a jelszó objektum nem lehet undefined!'});
+    }
+
+    const letezofelhasznalo = await felhasznalok.findOne({where: { email } });
+
+    if (letezofelhasznalo) {
+        return res.status(400).json({message: 'Létező felhasználó!'});
+    }
+
+    try {
+        const tiltottjelszo = await bcrypt.hash(password, 10);
+        const newUser = await felhasznalok.create({name, email, password: tiltottjelszo});
+        return res.status(201).json({message: 'Sikeres regisztráció!'})
+    } catch(error) {
+        console.log('Hiba a regisztráció során:', error);
+        return res.status(500).json({message: 'Hiba történt a regisztráció során!'})
+    }
+});
+
+
+app.post('/login', async (req, res) => {
+    const {email, password} = req.body;
+
+    if (typeof(email) == undefined) {
+        return res.status(401).json({message: 'Hiba, az email objektum nem lehet undefined!'});
+    }
+
+    if (typeof(password) == undefined) {
+        return res.status(401).json({message: 'Hiba, a jelszó objektum nem lehet undefined!'});
+    }
+
+
+    const letezofelhasznalo = await felhasznalok.findOne({where: {email}});
+
+    if (!letezofelhasznalo) {
+        return res.status(404).json({message: 'Nem létezik ilyen felhasználó!'});
+    }
+
+    const jelszo = bcrypt.hash(password, 10);
+    const validjelszo = bcrypt.compare(jelszo, letezofelhasznalo.password);
+
+    if (!validjelszo) {
+        return res.status(401).json({message: 'Hibás jelszó!'})
+    }
+
+    // Token generálása
+    const felhasznalo = {id: userId, email};
+    const token = jwt.sign(felhasznalo, SECRET_KEY, {expiresIn: '1h'});
+
+    // token elküldése a frontendnek
+    res.json({token});
+
+    return res.status(201).json({message: 'Sikeres bejelentkezés!'})
+});
+
+app.post('logout', async (req, res) => {
+
+})
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+})
+
+Jelenlegi állása a projektnek, UserID és JWT token már használva van
