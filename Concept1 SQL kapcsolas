@@ -1,0 +1,31 @@
+const express = require('express');
+const mysql = require('mysql2');
+
+const app = express();
+const PORT = 5000;
+
+const db = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'test_db'
+});
+
+db.connect((err) => {
+    if (err) {
+        console.log('Nem sikerült kpcsolódni az adatbázishoz!');
+    }
+    else {
+        console.log('sikeres csatlakozás az adatbázishoz!');
+    }
+});
+
+app.get('/', (req, res) => {
+    res.send('MYSQL kapcsolat sikeres!');
+});
+
+app.listen(PORT, () => {
+    console.log(`A szervet fut http://loclahost:${PORT}`);
+});
+
+Backend kapcsolás SQL-hez. Itt még sequelize nincsen használva, ez csak egy teszt, hogy működik e a kommunikáció
